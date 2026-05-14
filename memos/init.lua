@@ -9,10 +9,10 @@ local function memo_entry(memo)
   local display_parts = {}
 
   if memo.createTime then
-    local success, parsed = pcall(lc.time.parse, memo.createTime)
+    local success, parsed = pcall(deck.time.parse, memo.createTime)
     if success then
       memo.timestamp = parsed
-      table.insert(display_parts, lc.time.format(memo.timestamp, 'compact'):fg 'yellow')
+      table.insert(display_parts, deck.time.format(memo.timestamp, 'compact'):fg 'yellow')
       table.insert(display_parts, ' ')
     end
   end
@@ -25,7 +25,7 @@ local function memo_entry(memo)
     key = tostring(memo.id),
     kind = 'memo',
     memo = memo,
-    display = lc.style.line(display_parts),
+    display = deck.style.line(display_parts),
   }
 end
 
@@ -36,8 +36,8 @@ function M.setup(opt)
 end
 
 function M.list(_, cb)
-  lc.log('info', 'Loading memos list')
-  lc.api.set_preview(nil, 'Loading memos...')
+  deck.log('info', 'Loading memos list')
+  deck.api.set_preview(nil, 'Loading memos...')
 
   if not action.ready() then
     cb(meta.attach {
@@ -55,14 +55,14 @@ function M.list(_, cb)
 
   action.api_call('GET', '/memos?state=NORMAL&pageSize=100', nil, function(res)
     if not res.success then
-      lc.notify('Error: ' .. tostring(res.error or 'Unknown error'))
+      deck.notify('Error: ' .. tostring(res.error or 'Unknown error'))
       cb(meta.attach {})
       return
     end
 
-    local memos = lc.json.decode(res.body)
+    local memos = deck.json.decode(res.body)
     if type(memos) ~= 'table' or type(memos.memos) ~= 'table' or #memos.memos == 0 then
-      lc.notify 'No memos found'
+      deck.notify 'No memos found'
       cb(meta.attach {})
       return
     end
@@ -73,7 +73,7 @@ function M.list(_, cb)
       table.insert(entries, memo_entry(memo))
     end
 
-    lc.log('info', 'Loaded {} memos entries', #entries)
+    deck.log('info', 'Loaded {} memos entries', #entries)
     cb(meta.attach(entries))
   end)
 end

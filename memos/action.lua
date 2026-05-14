@@ -8,14 +8,14 @@ end
 
 
 local function current_entry()
-  local entry = lc.api.get_hovered()
+  local entry = deck.api.get_hovered()
   if not entry or entry.kind ~= 'memo' or not entry.memo then return nil end
   return entry
 end
 
 local function format_timestamp(ts)
   if not ts then return 'Unknown' end
-  local success, timestamp = pcall(lc.time.parse, ts)
+  local success, timestamp = pcall(deck.time.parse, ts)
   if success and timestamp then return os.date('%Y-%m-%d %H:%M:%S', timestamp) end
   return ts
 end
@@ -34,7 +34,7 @@ local function is_image_attachment(attachment)
   return mime:match '^image/' ~= nil
 end
 
-local IMAGE_CACHE_DIR = (os.getenv 'HOME' or '/tmp') .. '/.cache/lazycmd/memos-images'
+local IMAGE_CACHE_DIR = (os.getenv 'HOME' or '/tmp') .. '/.cache/lazydeck/memos-images'
 
 local function attachment_image_url(attachment)
   if not is_image_attachment(attachment) then return nil end
@@ -62,8 +62,8 @@ local function attachment_preview_image(attachment)
   if not url then return nil end
 
   local path = cached_image_path(url, attachment.filename, attachment)
-  local stat = lc.fs.stat(path)
-  if stat and stat.exists and stat.is_file and (stat.size or 0) > 128 then return lc.style.image(path) end
+  local stat = deck.fs.stat(path)
+  if stat and stat.exists and stat.is_file and (stat.size or 0) > 128 then return deck.style.image(path) end
 
   return nil
 end
@@ -76,15 +76,15 @@ local function prefetch_attachment_image(attachment, done)
   end
 
   local path = cached_image_path(url, attachment.filename, attachment)
-  local stat = lc.fs.stat(path)
+  local stat = deck.fs.stat(path)
   if stat and stat.exists and stat.is_file and (stat.size or 0) > 128 then
     if done then done(true) end
     return
   end
 
-  if stat and stat.exists and stat.is_file then lc.fs.remove(path) end
+  if stat and stat.exists and stat.is_file then deck.fs.remove(path) end
 
-  lc.fs.mkdir(IMAGE_CACHE_DIR)
+  deck.fs.mkdir(IMAGE_CACHE_DIR)
 
   local cmd = { 'curl', '-k', '-L', '-sS' }
   if cfg and cfg.token and cfg.token ~= '' then
@@ -95,11 +95,11 @@ local function prefetch_attachment_image(attachment, done)
   table.insert(cmd, path)
   table.insert(cmd, url)
 
-  lc.system.exec(cmd, function(output)
+  deck.system.exec(cmd, function(output)
     local ok = output and output.code == 0
-    local new_stat = lc.fs.stat(path)
+    local new_stat = deck.fs.stat(path)
     ok = ok and new_stat and new_stat.exists and new_stat.is_file and (new_stat.size or 0) > 128
-    if not ok and new_stat and new_stat.exists and new_stat.is_file then lc.fs.remove(path) end
+    if not ok and new_stat and new_stat.exists and new_stat.is_file then deck.fs.remove(path) end
     if done then done(ok) end
   end)
 end
@@ -113,41 +113,41 @@ function M.ready()
 end
 
 function M.api_call(method, path, body, cb)
-  lc.log('debug', 'API call: {} {}', method, path)
+  deck.log('debug', 'API call: {} {}', method, path)
 
-  lc.http.request({
+  deck.http.request({
     method = method,
     url = cfg.base_url .. '/api/v1' .. path,
     headers = {
       ['Authorization'] = 'Bearer ' .. cfg.token,
       ['Content-Type'] = 'application/json',
     },
-    body = body and lc.json.encode(body),
+    body = body and deck.json.encode(body),
   }, function(response) cb(response) end)
 end
 
 function M.edit_current_memo(entry)
   entry = entry or current_entry()
   if not entry then
-    lc.notify 'No memo selected'
+    deck.notify 'No memo selected'
     return
   end
 
   local memo = entry.memo
   local content = memo.content or ''
 
-  lc.system.edit({ content = content, ext = 'md' }, function(new_content, err)
+  deck.system.edit({ content = content, ext = 'md' }, function(new_content, err)
     if err then
-      lc.notify('Error: Failed to read edited content ' .. tostring(err or ''))
+      deck.notify('Error: Failed to read edited content ' .. tostring(err or ''))
       return
     end
     if not new_content then
-      lc.notify 'Failed to read edited content'
+      deck.notify 'Failed to read edited content'
       return
     end
 
     if new_content == content then
-      lc.notify 'No changes made'
+      deck.notify 'No changes made'
       return
     end
 
@@ -155,12 +155,12 @@ function M.edit_current_memo(entry)
       content = new_content,
     }, function(res)
       if not res.success then
-        lc.notify('Failed to update memo: ' .. tostring(res.error or 'Unknown error'))
+        deck.notify('Failed to update memo: ' .. tostring(res.error or 'Unknown error'))
         return
       end
 
-      lc.notify 'Memo updated successfully'
-      lc.cmd 'reload'
+      deck.notify 'Memo updated successfully'
+      deck.cmd 'reload'
     end)
   end)
 end
@@ -168,53 +168,53 @@ end
 function M.yank_current_memo(entry)
   entry = entry or current_entry()
   if not entry or not entry.memo.content then
-    lc.notify 'No memo selected'
+    deck.notify 'No memo selected'
     return
   end
 
-  local success, err = pcall(lc.osc52_copy, entry.memo.content:trim())
+  local success, err = pcall(deck.osc52_copy, entry.memo.content:trim())
   if not success then
-    lc.notify('Failed to copy: ' .. tostring(err))
+    deck.notify('Failed to copy: ' .. tostring(err))
     return
   end
-  lc.notify 'Copied to clipboard'
+  deck.notify 'Copied to clipboard'
 end
 
 function M.delete_current_memo(entry)
   entry = entry or current_entry()
   if not entry then
-    lc.notify 'No memo selected'
+    deck.notify 'No memo selected'
     return
   end
 
-  lc.confirm {
+  deck.confirm {
     prompt = 'Delete this memo?',
     on_confirm = function()
       M.api_call('DELETE', '/memos/' .. entry.memo.id, nil, function(res)
         if not res.success then
-          lc.notify('Failed to delete memo: ' .. tostring(res.error or 'Unknown error'))
+          deck.notify('Failed to delete memo: ' .. tostring(res.error or 'Unknown error'))
           return
         end
 
-        lc.notify('Memo deleted successfully: ' .. entry.memo.id)
-        lc.cmd 'reload'
+        deck.notify('Memo deleted successfully: ' .. entry.memo.id)
+        deck.cmd 'reload'
       end)
     end,
   }
 end
 
 function M.create_new_memo()
-  lc.system.edit({ content = '', ext = 'md' }, function(content, err)
+  deck.system.edit({ content = '', ext = 'md' }, function(content, err)
     if err then
-      lc.notify('Error: Failed to read edited content' .. tostring(err))
+      deck.notify('Error: Failed to read edited content' .. tostring(err))
       return
     end
     if not content then
-      lc.notify 'Failed to read edited content'
+      deck.notify 'Failed to read edited content'
       return
     end
     if content:match '^%s*$' then
-      lc.notify 'No content provided'
+      deck.notify 'No content provided'
       return
     end
 
@@ -223,19 +223,19 @@ function M.create_new_memo()
       visibility = cfg.visibility,
     }, function(res)
       if not res.success then
-        lc.notify('Failed to create memo: ' .. tostring(res.error or 'Unknown error'))
+        deck.notify('Failed to create memo: ' .. tostring(res.error or 'Unknown error'))
         return
       end
 
-      local result = lc.json.decode(res.body)
+      local result = deck.json.decode(res.body)
       if result and result.name then
-        lc.notify('Memo created: ' .. result.name)
+        deck.notify('Memo created: ' .. result.name)
       else
-        lc.notify 'Memo created successfully'
+        deck.notify 'Memo created successfully'
       end
 
-      lc.cmd 'reload'
-      lc.cmd 'scroll_by -9999'
+      deck.cmd 'reload'
+      deck.cmd 'scroll_by -9999'
     end)
   end)
 end
@@ -243,14 +243,14 @@ end
 function M.build_preview(memo)
   local lines = {}
   local preview_parts = {}
-  table.insert(lines, lc.style.line { ('󰦨 '):fg 'cyan', ('Metadata'):fg 'cyan' })
-  table.insert(lines, lc.style.line { ('   ID:           '):fg 'cyan', (memo.id or ''):fg 'yellow' })
-  table.insert(lines, lc.style.line { ('   State:        '):fg 'cyan', (memo.state or 'UNKNOWN'):fg 'blue' })
-  table.insert(lines, lc.style.line { ('   Visibility:   '):fg 'cyan', (memo.visibility or 'PRIVATE'):fg 'magenta' })
-  table.insert(lines, lc.style.line { ('   Created:      '):fg 'cyan', format_timestamp(memo.createTime):fg 'green' })
-  table.insert(lines, lc.style.line { ('   Updated:      '):fg 'cyan', format_timestamp(memo.updateTime):fg 'green' })
+  table.insert(lines, deck.style.line { ('󰦨 '):fg 'cyan', ('Metadata'):fg 'cyan' })
+  table.insert(lines, deck.style.line { ('   ID:           '):fg 'cyan', (memo.id or ''):fg 'yellow' })
+  table.insert(lines, deck.style.line { ('   State:        '):fg 'cyan', (memo.state or 'UNKNOWN'):fg 'blue' })
+  table.insert(lines, deck.style.line { ('   Visibility:   '):fg 'cyan', (memo.visibility or 'PRIVATE'):fg 'magenta' })
+  table.insert(lines, deck.style.line { ('   Created:      '):fg 'cyan', format_timestamp(memo.createTime):fg 'green' })
+  table.insert(lines, deck.style.line { ('   Updated:      '):fg 'cyan', format_timestamp(memo.updateTime):fg 'green' })
 
-  if memo.pinned then table.insert(lines, lc.style.line { ('   '):fg 'cyan', ('Pinned'):fg 'yellow' }) end
+  if memo.pinned then table.insert(lines, deck.style.line { ('   '):fg 'cyan', ('Pinned'):fg 'yellow' }) end
 
   if memo.tags and #memo.tags > 0 then
     local tag_parts = {}
@@ -259,13 +259,13 @@ function M.build_preview(memo)
       if i > 1 then table.insert(tag_parts, ' ') end
       table.insert(tag_parts, ('#' .. tag):fg 'cyan')
     end
-    table.insert(lines, lc.style.line(tag_parts))
+    table.insert(lines, deck.style.line(tag_parts))
   else
-    table.insert(lines, lc.style.line { ('   Tags:         '):fg 'cyan', ('(none)'):fg 'dark_gray' })
+    table.insert(lines, deck.style.line { ('   Tags:         '):fg 'cyan', ('(none)'):fg 'dark_gray' })
   end
 
   if memo.attachments and #memo.attachments > 0 then
-    table.insert(lines, lc.style.line {
+    table.insert(lines, deck.style.line {
       ('   Attachments: '):fg 'cyan',
     })
     for _, attachment in ipairs(memo.attachments) do
@@ -283,10 +283,10 @@ function M.build_preview(memo)
         table.insert(parts, ('  '):fg 'cyan')
         table.insert(parts, tostring(size):fg 'green')
       end
-      table.insert(lines, lc.style.line(parts))
+      table.insert(lines, deck.style.line(parts))
 
       if attachment.externalLink and attachment.externalLink ~= '' then
-        table.insert(lines, lc.style.line {
+        table.insert(lines, deck.style.line {
           ('       ↳ '):fg 'dark_gray',
           tostring(attachment.externalLink):fg 'blue',
         })
@@ -295,7 +295,7 @@ function M.build_preview(memo)
   end
 
   if memo.relations and #memo.relations > 0 then
-    table.insert(lines, lc.style.line {
+    table.insert(lines, deck.style.line {
       ('   '):fg 'cyan',
       ('Relations:   '):fg 'cyan',
       tostring(#memo.relations):fg 'blue',
@@ -303,14 +303,14 @@ function M.build_preview(memo)
   end
 
   if memo.reactions and #memo.reactions > 0 then
-    table.insert(lines, lc.style.line {
+    table.insert(lines, deck.style.line {
       ('   Reactions:  '):fg 'cyan',
     })
     for _, reaction in ipairs(memo.reactions) do
       local reaction_type = reaction.reactionType or '?'
       local creator = reaction.creator or ''
       creator = creator:match('users/(.+)$') or creator
-      table.insert(lines, lc.style.line {
+      table.insert(lines, deck.style.line {
         ('     • '):fg 'dark_gray',
         tostring(reaction_type):fg 'red',
         ('  '):fg 'cyan',
@@ -320,7 +320,7 @@ function M.build_preview(memo)
   end
 
   table.insert(lines, '')
-  table.insert(lines, lc.style.line { ('󰒓 '):fg 'cyan', ('Properties'):fg 'cyan' })
+  table.insert(lines, deck.style.line { ('󰒓 '):fg 'cyan', ('Properties'):fg 'cyan' })
   if memo.property then
     local props = {}
     if memo.property.hasLink then table.insert(props, ('links'):fg 'blue') end
@@ -333,29 +333,29 @@ function M.build_preview(memo)
         if i > 1 then table.insert(prop_parts, ', ') end
         table.insert(prop_parts, prop)
       end
-      table.insert(lines, lc.style.line(prop_parts))
+      table.insert(lines, deck.style.line(prop_parts))
     else
-      table.insert(lines, lc.style.line { ('   (none)'):fg 'dark_gray' })
+      table.insert(lines, deck.style.line { ('   (none)'):fg 'dark_gray' })
     end
   else
-    table.insert(lines, lc.style.line { ('   (none)'):fg 'dark_gray' })
+    table.insert(lines, deck.style.line { ('   (none)'):fg 'dark_gray' })
   end
 
   table.insert(lines, '')
-  table.insert(lines, lc.style.line { ('󰈙 '):fg 'cyan', ('Content'):fg 'cyan' })
+  table.insert(lines, deck.style.line { ('󰈙 '):fg 'cyan', ('Content'):fg 'cyan' })
   table.insert(lines, '')
 
   local content = memo.content or '(no content)'
-  local highlighted = lc.style.highlight(content, 'markdown')
+  local highlighted = deck.style.highlight(content, 'markdown')
 
-  table.insert(preview_parts, lc.style.text(lines))
+  table.insert(preview_parts, deck.style.text(lines))
 
   if memo.attachments and #memo.attachments > 0 then
     for _, attachment in ipairs(memo.attachments) do
       local image = attachment_preview_image(attachment)
       if image then
         table.insert(preview_parts, '')
-        table.insert(preview_parts, lc.style.line {
+        table.insert(preview_parts, deck.style.line {
           ('󰋩 '):fg 'cyan',
           tostring(attachment.filename or 'Image'):fg 'yellow',
         })
@@ -406,10 +406,10 @@ function M.memo_preview(entry, cb)
 end
 
 function M.info_preview(entry)
-  return lc.style.text {
-    lc.style.line { (entry.title or 'memos'):fg 'cyan' },
-    lc.style.line { (entry.message or ''):fg(entry.color or 'darkgray') },
-    lc.style.line { (entry.detail or ''):fg 'darkgray' },
+  return deck.style.text {
+    deck.style.line { (entry.title or 'memos'):fg 'cyan' },
+    deck.style.line { (entry.message or ''):fg(entry.color or 'darkgray') },
+    deck.style.line { (entry.detail or ''):fg 'darkgray' },
   }
 end
 
