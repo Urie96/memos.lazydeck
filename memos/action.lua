@@ -34,7 +34,7 @@ local function is_image_attachment(attachment)
   return mime:match '^image/' ~= nil
 end
 
-local IMAGE_CACHE_DIR = (os.getenv 'HOME' or '/tmp') .. '/.cache/lazydeck/memos-images'
+local IMAGE_CACHE_DIR = (os.getenv 'HOME' and (os.getenv 'HOME' .. '/.cache/lazydeck/memos-images'))
 
 local function attachment_image_url(attachment)
   if not is_image_attachment(attachment) then return nil end
@@ -59,7 +59,7 @@ end
 
 local function attachment_preview_image(attachment)
   local url = attachment_image_url(attachment)
-  if not url then return nil end
+  if not url or not IMAGE_CACHE_DIR then return nil end
 
   local path = cached_image_path(url, attachment.filename, attachment)
   local stat = deck.fs.stat(path)
@@ -70,7 +70,7 @@ end
 
 local function prefetch_attachment_image(attachment, done)
   local url = attachment_image_url(attachment)
-  if not url then
+  if not url or not IMAGE_CACHE_DIR then
     if done then done(false) end
     return
   end
