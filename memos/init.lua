@@ -4,6 +4,14 @@ local meta = require 'memos.meta'
 
 local M = {}
 
+function M.meta()
+  return {
+    icon = '󰎞',
+    desc = 'Memos note client',
+    color = 'yellow',
+  }
+end
+
 local function memo_entry(memo)
   local content = memo.content or ''
   local display_parts = {}
