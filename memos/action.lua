@@ -34,7 +34,7 @@ local function is_image_attachment(attachment)
   return mime:match '^image/' ~= nil
 end
 
-local IMAGE_CACHE_DIR = (os.getenv 'HOME' and (os.getenv 'HOME' .. '/.cache/lazydeck/memos-images'))
+local IMAGE_CACHE_DIR = deck.stdpath 'cache' .. '/memos-images'
 
 local function attachment_image_url(attachment)
   if not is_image_attachment(attachment) then return nil end
